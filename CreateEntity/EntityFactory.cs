@@ -53,6 +53,9 @@ namespace CreateEntity
                                                           .ThenBy(o => o.CSharpName)
                                                           .ToList();
                         CodeGenerator.BuildEntityClass(tables[i], tableColumn);
+                        CodeGenerator.BuildEntityConfigClass(tables[i], tableColumn);
+
+                        
                     }
 
                     //汇报进度

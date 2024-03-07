@@ -27,12 +27,12 @@ namespace CreateEntity
             sb.AppendLine("\t\t/// " + comments);
             sb.AppendLine("\t\t/// </summary>");
 
-            if (column.ConstraintType == "P")
-            {
-                sb.AppendLine("\t\t[Key]");
-            }
+            //if (column.ConstraintType == "P")
+            //{
+            //    sb.AppendLine("\t\t[Key]");
+            //}
 
-            sb.AppendLine($"\t\t[Column(\"{column.ColumnName}\")]");
+            //sb.AppendLine($"\t\t[Column(\"{column.ColumnName}\")]");
 
             //if (column.Nullable=="N")
             //{
@@ -44,7 +44,7 @@ namespace CreateEntity
                 {
                     comments = column.CSharpName;
                 }
-                sb.AppendLine($"\t\t[StringLength({column.DataLength}, ErrorMessage = \"{comments}长度不能超出{column.DataLength}字符\")]");
+                //sb.AppendLine($"\t\t[StringLength({column.DataLength}, ErrorMessage = \"{comments}长度不能超出{column.DataLength}字符\")]");
             }
 
 
@@ -55,6 +55,61 @@ namespace CreateEntity
             }
 
             sb.AppendLine($"\t\tpublic {colType} {column.CSharpName} " + "{ get; set; }");
+
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// 生成Config中的每一行
+        /// </summary>
+        /// <param name="tableName">表名</param>
+        /// <param name="column">列</param>
+        /// <returns></returns>
+        public static string GenerateEntityConfigProperty(TableColumn column,int i)
+        {
+            StringBuilder sb = new StringBuilder();
+
+            //字符集不匹配的话乱码可能会出现换行符号，导致排版混乱或报错
+            string comments = column.Comments.Replace("\n", "").Replace("\r", "");
+
+            //sb.AppendLine("\t\t/// <summary>");
+            //sb.AppendLine("\t\t/// " + comments);
+            //sb.AppendLine("\t\t/// </summary>");
+            if (i == 0)
+            {
+                sb.AppendLine("builder.ToTable(\"" + column.TableName + "\");");
+            }
+            if (column.ConstraintType == "P")
+            {
+                sb.AppendLine("\t\t\tbuilder.HasKey(o => o."+column.ColumnName+");");
+            }
+
+            //sb.AppendLine($"\t\t[Column(\"{column.ColumnName}\")]");
+
+            //if (column.Nullable=="N")
+            //{
+            //    sb.AppendLine($"\t\t[Required(ErrorMessage = \"{column.Comments ?? column.ColumnName}不允许为空\")]\n");
+            //}
+            if (column.CSharpType == "string")
+            {
+                //builder.Property(o => o.Reason).HasMaxLength(512).IsUnicode(false);
+                sb.AppendLine($"\t\t\tbuilder.Property(o => o."+column.ColumnName+").HasMaxLength("+column.DataLength+").IsUnicode(false);");
+                //if (string.IsNullOrEmpty(comments))
+                //{
+                //    comments = column.CSharpName;
+                //}
+
+                //sb.AppendLine($"\t\t[StringLength({column.DataLength}, ErrorMessage = \"{comments}长度不能超出{column.DataLength}字符\")]");
+            }
+
+
+            //string colType = column.CSharpType;
+            //if (colType != "string" && colType != "byte[]" && column.Nullable == "Y")
+            //{
+            //    colType = colType + "?";
+            //}
+
+            //sb.AppendLine($"\t\tpublic {colType} {column.CSharpName} " + "{ get; set; }");
 
             return sb.ToString();
         }
@@ -87,14 +142,67 @@ namespace CreateEntity
                 sb.AppendLine(tmp);
             }
 
-            string content = GetTemplateContext("EntityTemplate.txt");
+            string content = GetTemplateContext("EntityTemplate2.txt");
 
             content = content.Replace("{Namespace}", Helper.nameSpace)
                .Replace("{ClassName}", table.CSharpName)
-               .Replace("{TableName}", table.Name)
+               //.Replace("{TableName}", table.Name)
                .Replace("{Properties}", sb.ToString());
 
-            string path = Helper.path + "\\" + table.CSharpName + ".cs";
+            string path = Helper.path + "\\" + table.CSharpName + "Info.cs";
+            WriteAndSave(path, content);
+        }
+
+        /// <summary>
+        /// 生成实体Config类文件
+        /// </summary>
+        /// <param name="table"></param>
+        /// <param name="columns"></param>
+        public static void BuildEntityConfigClass(Table table, List<TableColumn> columns)
+        {
+            columns.ForEach(x =>
+            {
+                string csharpType = DataTypeMapping.dbColumnDataTypes.FirstOrDefault(t =>
+                        t.DatabaseType == Helper.dbType && t.ColumnTypes.Split(',').Any(p =>
+                            p.Trim().Equals(x.DataType, StringComparison.OrdinalIgnoreCase)))?.CSharpType;
+                if (string.IsNullOrEmpty(csharpType))
+                {
+                    throw new Exception($"未从字典中找到\"[{x.TableName}]表 [{x.ColumnName}]字段 {x.DataType}\"类型，对应的C#数据类型");
+                }
+
+                x.CSharpType = csharpType;
+            });
+
+            //生成属性
+            StringBuilder sb = new StringBuilder();
+            int i = 0;
+            foreach (TableColumn column in columns)
+            {
+                string tmp = GenerateEntityConfigProperty(column,i);
+                i++;
+                sb.AppendLine(tmp);
+            }
+
+            string content = GetTemplateContext("EntityConfig.txt");
+
+            content = content.Replace("{Namespace}", Helper.nameSpace)
+               .Replace("{ClassName}", table.CSharpName)
+               .Replace("{EntityName}", table.Name)
+               .Replace("{builder}", sb.ToString());
+
+            string path = Helper.path + "\\"+"config"+"\\" + table.CSharpName + "InfoConfig.cs";
+            string prepath = Helper.path + "\\" + "config";
+            if (!File.Exists(prepath))
+            {
+                //创建文件
+                try
+                {
+                    Directory.CreateDirectory(prepath);
+                }
+                catch (Exception e)
+                {
+                }
+            }
             WriteAndSave(path, content);
         }
 
